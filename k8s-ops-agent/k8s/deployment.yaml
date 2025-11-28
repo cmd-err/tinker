@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-ops-agent
+  namespace: default
+  labels:
+    app: k8s-ops-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-ops-agent
+  template:
+    metadata:
+      labels:
+        app: k8s-ops-agent
+    spec:
+      serviceAccountName: k8s-ops-agent-sa
+      containers:
+        - name: k8s-ops-agent
+          # TODO: Replace with actual image once built
+          image: k8s-ops-agent:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+          env:
+            - name: K8S_MODE
+              value: "incluster"
+            - name: PORT
+              value: "3000"
+            - name: NODE_ENV
+              value: "production"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      securityContext:
+        fsGroup: 1000

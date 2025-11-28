@@ -1,0 +1,66 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-ops-agent-role
+  labels:
+    app: k8s-ops-agent
+rules:
+  # Core resources
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - pods
+      - services
+      - namespaces
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+      - events
+    verbs: ["get", "list", "watch"]
+  
+  # Apps resources
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+    verbs: ["get", "list", "watch"]
+  
+  # Autoscaling resources
+  - apiGroups: ["autoscaling"]
+    resources:
+      - horizontalpodautoscalers
+    verbs: ["get", "list", "watch"]
+  
+  # Batch resources
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+  
+  # Istio networking resources
+  - apiGroups: ["networking.istio.io"]
+    resources:
+      - virtualservices
+      - destinationrules
+      - gateways
+      - serviceentries
+      - sidecars
+    verbs: ["get", "list", "watch"]
+  
+  # Istio security resources
+  - apiGroups: ["security.istio.io"]
+    resources:
+      - peerauthentications
+      - authorizationpolicies
+      - requestauthentications
+    verbs: ["get", "list", "watch"]
+  
+  # Metrics API (if available)
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - nodes
+      - pods
+    verbs: ["get", "list"]

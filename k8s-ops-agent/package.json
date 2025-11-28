@@ -1,0 +1,35 @@
+{
+  "name": "@cmd-err/k8s-ops-agent",
+  "version": "0.1.0",
+  "description": "Kubernetes Cost & Traffic Ops Agent integrated with Neurolink via MCP",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -w -p tsconfig.json",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" || exit 0",
+    "test": "echo \"No tests yet\" && exit 0",
+    "dev:snapshot": "node dist/dev/runClusterSnapshot.js",
+    "start": "node dist/server.js",
+    "start:dev": "K8S_MODE=kubeconfig node dist/server.js"
+  },
+  "keywords": [
+    "kubernetes",
+    "cost-optimization",
+    "istio",
+    "mcp",
+    "agent",
+    "neurolink"
+  ],
+  "author": "cmd-err",
+  "license": "MIT",
+  "dependencies": {
+    "@kubernetes/client-node": "^1.4.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "eslint": "^9.0.0"
+  }
+}

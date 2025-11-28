@@ -50,6 +50,17 @@ export const DetectZombieWorkloadsInputSchema = z.object({
 export type DetectZombieWorkloadsInput = z.infer<typeof DetectZombieWorkloadsInputSchema>;
 
 /**
+ * System namespaces to skip during zombie detection
+ */
+const SYSTEM_NAMESPACES_TO_SKIP = [
+  "kube-system",
+  "kube-public",
+  "kube-node-lease",
+  "default",
+  "istio-system",
+];
+
+/**
  * Generate unique ID for zombie workloads
  */
 function generateId(kind: string, name: string, namespace?: string): string {
@@ -316,9 +327,8 @@ function detectZombieNamespaces(
 
     // Skip system namespaces
     if (
-      ns.name.startsWith("kube-") ||
-      ns.name === "default" ||
-      ns.name === "istio-system"
+      SYSTEM_NAMESPACES_TO_SKIP.includes(ns.name) ||
+      ns.name.startsWith("kube-")
     ) {
       continue;
     }

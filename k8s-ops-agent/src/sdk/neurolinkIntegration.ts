@@ -79,9 +79,16 @@ export function getNeuroLinkServerConfig(): NeurolinkMCPServerConfig {
  * ```
  */
 
-// Placeholder for Neurolink type until SDK is available
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Neurolink = any;
+/**
+ * Neurolink interface - defines expected Neurolink SDK methods
+ * This is a placeholder until the actual SDK is available
+ */
+export interface Neurolink {
+  addInMemoryMCPServer: (
+    serverId: string,
+    config: NeurolinkMCPServerConfig
+  ) => Promise<void>;
+}
 
 /**
  * Register the K8s Ops Server with Neurolink

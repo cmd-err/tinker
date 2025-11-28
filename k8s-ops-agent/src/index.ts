@@ -54,4 +54,5 @@ export {
   getNeuroLinkServerConfig,
   registerWithNeurolink,
   type NeurolinkMCPServerConfig,
+  type Neurolink,
 } from "./sdk/neurolinkIntegration.js";

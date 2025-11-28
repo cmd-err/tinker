@@ -61,6 +61,12 @@ export const AnalyzeCostOptimizationInputSchema = z.object({
 export type AnalyzeCostOptimizationInput = z.infer<typeof AnalyzeCostOptimizationInputSchema>;
 
 /**
+ * Default resource estimates when actual values are unavailable
+ */
+const DEFAULT_POD_CPU_MILLICORES = 100; // 100m default assumption
+const DEFAULT_POD_MEMORY_BYTES = 128 * 1024 * 1024; // 128Mi default assumption
+
+/**
  * Parse CPU string to millicores
  */
 function parseCPU(cpu: string | undefined): number {
@@ -160,8 +166,8 @@ function analyzeNodeUtilization(
         totalRequestedMemory += workloadReq.memory;
       } else {
         // Estimate from pod (basic assumption)
-        totalRequestedCPU += 100; // 100m default assumption
-        totalRequestedMemory += 128 * 1024 * 1024; // 128Mi default
+        totalRequestedCPU += DEFAULT_POD_CPU_MILLICORES;
+        totalRequestedMemory += DEFAULT_POD_MEMORY_BYTES;
       }
     }
 

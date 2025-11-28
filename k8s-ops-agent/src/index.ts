@@ -56,3 +56,23 @@ export {
   type NeurolinkMCPServerConfig,
   type Neurolink,
 } from "./sdk/neurolinkIntegration.js";
+
+// Export Agent (orchestration layer)
+export {
+  K8sOpsAgent,
+  createK8sOpsAgent,
+  quickHealthCheck,
+  fullClusterReport,
+  analyzeCosts,
+  findZombies,
+  type AgentIntent,
+  type AgentRequest,
+  type AgentResponse,
+  type AgentConfig,
+  type AgentStep,
+  type AgentFinding,
+  type AgentSummary,
+  type AgentEvent,
+  type AgentEventType,
+  type AgentEventHandler,
+} from "./agent/index.js";

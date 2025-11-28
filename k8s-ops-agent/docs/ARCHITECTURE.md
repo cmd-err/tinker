@@ -2,7 +2,12 @@
 
 ## Overview
 
-The K8s Ops Agent is a Kubernetes Cost & Traffic Operations Agent that integrates with Neurolink via the Model Context Protocol (MCP). It provides intelligent analysis capabilities for Kubernetes clusters including cost optimization, zombie workload detection, and Istio traffic analysis.
+The K8s Ops Agent is a Kubernetes Cost & Traffic Operations **AI Agent** that integrates with Neurolink via the Model Context Protocol (MCP). It provides intelligent analysis capabilities for Kubernetes clusters including cost optimization, zombie workload detection, and Istio traffic analysis.
+
+**Key Distinction:**
+- **Agent Layer**: Orchestrates tools, plans workflows, generates summaries
+- **MCP Server**: Exposes tools for direct access and Neurolink integration
+- **Tools**: Individual analysis functions
 
 ## System Architecture
 
@@ -12,12 +17,19 @@ The K8s Ops Agent is a Kubernetes Cost & Traffic Operations Agent that integrate
 │                         (Natural Language Interface)                        │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
-                                      │ MCP Protocol
+                                      │ Natural Language
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           K8s Ops MCP Server                                │
+│                          K8s Ops Agent Layer                                │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                        Tool Registry                                  │  │
+│  │                    K8sOpsAgent (Orchestration)                        │  │
+│  │  • Intent Planning     • Multi-tool Execution    • Error Recovery    │  │
+│  │  • Result Aggregation  • Summary Generation      • Progress Events   │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                      │                                      │
+│                                      ▼                                      │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                        MCP Server (Tool Registry)                    │  │
 │  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐ │  │
 │  │  │   Cluster   │ │    Cost     │ │   Zombie    │ │     Istio       │ │  │
 │  │  │  Snapshot   │ │Optimization │ │  Detection  │ │    Traffic      │ │  │
@@ -41,13 +53,64 @@ The K8s Ops Agent is a Kubernetes Cost & Traffic Operations Agent that integrate
 
 ## Component Details
 
-### 1. MCP Server Layer (`src/mcp/k8sOpsServer.ts`)
+### 1. Agent Layer (`src/agent/k8sOpsAgent.ts`)
 
-The MCP Server is the central orchestration layer that:
+The **K8sOpsAgent** is the orchestration layer that:
 
-- **Registers Tools**: Maintains a registry of available analysis tools
-- **Handles Execution**: Routes tool execution requests to appropriate handlers
-- **Provides Discovery**: Exposes tool metadata for Neurolink integration
+- **Plans Tool Execution**: Maps intents to tool sequences
+- **Executes Workflows**: Runs tools in order, handles errors
+- **Aggregates Results**: Combines findings from all tools
+- **Generates Summaries**: Produces human-readable narratives
+- **Emits Progress Events**: Real-time status updates
+
+```typescript
+class K8sOpsAgent {
+  // Run an analysis workflow
+  async run(request: AgentRequest): Promise<AgentResponse>;
+  
+  // Subscribe to progress events
+  onEvent(handler: AgentEventHandler): void;
+}
+
+// Available intents
+type AgentIntent =
+  | "cluster-health-check"
+  | "cost-optimization"
+  | "zombie-detection"
+  | "istio-analysis"
+  | "full-cluster-report";
+```
+
+#### Intent → Tool Mapping
+
+| Intent | Tools Executed |
+|--------|---------------|
+| `cluster-health-check` | snapshot → zombies |
+| `cost-optimization` | snapshot → cost |
+| `zombie-detection` | snapshot → zombies |
+| `istio-analysis` | snapshot → istio |
+| `full-cluster-report` | snapshot → cost → zombies → istio |
+
+#### Agent Response Structure
+
+```typescript
+interface AgentResponse {
+  success: boolean;
+  intent: AgentIntent;
+  totalDurationMs: number;
+  steps: AgentStep[];        // Execution trace
+  summary: AgentSummary;     // Executive summary
+  findings: AgentFinding[];  // Normalized issues
+  rawData?: {...};           // Optional raw tool outputs
+}
+```
+
+### 2. MCP Server Layer (`src/mcp/k8sOpsServer.ts`)
+
+The MCP Server exposes tools for:
+- Direct API access
+- Neurolink integration
+- Custom workflow building
 
 ```typescript
 interface K8sOpsServer {
@@ -60,7 +123,7 @@ interface K8sOpsServer {
 }
 ```
 
-### 2. Tool Layer (`src/mcp/tools/`)
+### 3. Tool Layer (`src/mcp/tools/`)
 
 Each tool follows the MCP tool interface:
 

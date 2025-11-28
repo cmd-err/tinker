@@ -2,11 +2,13 @@
 
 ## What is K8s Ops Agent?
 
-K8s Ops Agent is a Kubernetes operations assistant that helps you:
+K8s Ops Agent is a **Kubernetes operations AI agent** that:
 
-- **Optimize costs** by identifying underutilized resources
-- **Find zombie workloads** that are stuck, failing, or abandoned
-- **Analyze Istio traffic** configurations for misconfigurations
+- **Orchestrates** multiple analysis tools based on your intent
+- **Summarizes** findings into actionable insights
+- **Optimizes costs** by identifying underutilized resources
+- **Finds zombie workloads** that are stuck, failing, or abandoned
+- **Analyzes Istio traffic** configurations for misconfigurations
 
 It integrates with **Neurolink** via the Model Context Protocol (MCP), enabling natural language interactions with your cluster.
 
@@ -26,142 +28,136 @@ npm install
 npm run build
 ```
 
-### Test It
+### Test the Agent
 
 ```bash
-# Run against your cluster
-npm run dev:snapshot
+# Run full cluster report (recommended)
+npm run dev:agent:full
 
-# See full JSON output
-FULL_OUTPUT=true npm run dev:snapshot
+# Or specific analyses:
+npm run dev:agent:health   # Health check only
+npm run dev:agent:cost     # Cost optimization
+npm run dev:agent:zombies  # Zombie detection
+npm run dev:agent:istio    # Istio analysis
 ```
+
+## Agent vs Tools
+
+The K8s Ops Agent has two layers:
+
+| Layer | What it is | When to use |
+|-------|-----------|-------------|
+| **Agent** | Orchestration layer that plans, executes, and summarizes | High-level intents like "analyze my cluster" |
+| **Tools** | Individual functions that do one thing | Direct API access, building custom workflows |
+
+### Using the Agent (Recommended)
+
+```typescript
+import { K8sOpsAgent } from '@cmd-err/k8s-ops-agent';
+
+// Create agent
+const agent = new K8sOpsAgent({
+  k8sMode: 'kubeconfig',
+  verbose: true,
+});
+
+// Run a full cluster report
+const result = await agent.run({
+  intent: 'full-cluster-report',
+  includeIstio: true,
+});
+
+// Get the summary
+console.log(result.summary.headline);
+// "⚠️ Cluster needs attention: 3 high-priority issues found"
+
+console.log(result.summary.narrative);
+// "Analyzed cluster with 5 nodes and 47 pods. Found 2 zombie workloads..."
+
+// Get actionable findings
+for (const finding of result.findings) {
+  console.log(`[${finding.severity}] ${finding.title}`);
+  console.log(`  → ${finding.suggestedAction}`);
+}
+```
+
+### Available Intents
+
+| Intent | Tools Called | Use Case |
+|--------|-------------|----------|
+| `cluster-health-check` | snapshot → zombies | Quick health status |
+| `cost-optimization` | snapshot → cost analysis | Find savings |
+| `zombie-detection` | snapshot → zombie detection | Find stuck workloads |
+| `istio-analysis` | snapshot → istio analysis | Check traffic config |
+| `full-cluster-report` | snapshot → all analyses | Complete audit |
 
 ## MVP Features
 
-### 1. Cluster Snapshot (`get-cluster-snapshot`)
+### 1. Full Cluster Report
 
-**What it does**: Fetches a comprehensive view of your cluster state.
+**What it does**: Runs all analyses and generates a comprehensive summary.
 
-**Use cases**:
-- Get an overview of cluster resources
-- Feed data into analysis tools
-- Audit cluster composition
-
-**Example**:
 ```typescript
-const result = await k8sOpsServer.executeTool(
+const agent = new K8sOpsAgent({ k8sMode: 'kubeconfig' });
+const result = await agent.run({ intent: 'full-cluster-report' });
+
+// Summary includes:
+// - healthScore (0-100)
+// - healthStatus ('healthy' | 'warning' | 'critical')
+// - topPriorities (top 3 issues)
+// - potentialMonthlySavings
+// - narrative (human-readable summary)
+```
+
+### 2. Agent Findings
+
+All issues are normalized into findings with:
+
+```typescript
+interface AgentFinding {
+  id: string;
+  category: 'cost' | 'health' | 'zombie' | 'istio';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  title: string;
+  description: string;
+  resource?: { kind: string; name: string; namespace?: string };
+  suggestedAction?: string;
+  impact?: string;  // e.g., "~$50/month"
+}
+```
+
+### 3. Progress Events
+
+Track agent progress in real-time:
+
+```typescript
+agent.onEvent((event) => {
+  if (event.type === 'step-completed') {
+    console.log(`✅ ${event.data.message}`);
+  }
+});
+```
+
+## Using Tools Directly
+
+For lower-level access, use the MCP server directly:
+
+```typescript
+import { k8sOpsServer } from '@cmd-err/k8s-ops-agent';
+
+// Get cluster snapshot
+const snapshot = await k8sOpsServer.executeTool(
   'get-cluster-snapshot',
-  { 
-    includeIstio: true,
-    includeSystemNamespaces: false 
-  },
+  { includeIstio: true },
   { k8sMode: 'kubeconfig' }
 );
 
-// result.data contains:
-// - nodes: Array of node info
-// - namespaces: Array of namespace summaries
-// - workloads: Deployments, StatefulSets, DaemonSets
-// - pods: All pods with status
-// - hpas: HorizontalPodAutoscalers
-// - istio: VirtualServices, DestinationRules, Gateways
-```
-
-### 2. Cost Optimization (`analyze-cost-optimization`)
-
-**What it does**: Identifies opportunities to reduce cluster costs.
-
-**Detects**:
-- ⚡ Underutilized nodes (< 30% resource usage)
-- 📦 Overprovisioned workloads (limits >> requests)
-- 🏚️ Idle namespaces (no running pods)
-- 🔄 Scale-down opportunities
-
-**Example**:
-```typescript
-const costAnalysis = await k8sOpsServer.executeTool(
-  'analyze-cost-optimization',
-  { 
-    snapshot: clusterSnapshot,
-    thresholds: {
-      nodeUtilizationLow: 0.3,     // Flag nodes below 30%
-      workloadOverprovisionRatio: 2 // Flag if limits > 2x requests
-    },
-    pricingConfig: {
-      cpuCoreHourCost: 0.05,  // $0.05/core-hour
-      memoryGiBHourCost: 0.01 // $0.01/GiB-hour
-    }
-  },
-  { k8sMode: 'kubeconfig' }
-);
-
-// result.data contains:
-// - summary: "Found 5 cost optimization opportunities..."
-// - recommendations: Array of actionable recommendations
-// - totalPotentialSavings: Estimated monthly savings
-```
-
-### 3. Zombie Detection (`detect-zombie-workloads`)
-
-**What it does**: Finds workloads that are stuck, failing, or abandoned.
-
-**Detects**:
-- 💀 CrashLoopBackOff pods
-- ⏳ Stuck Pending pods (> 24h)
-- ❌ Failed pods
-- 🖥️ NotReady nodes
-- 📂 Empty/abandoned namespaces
-
-**Example**:
-```typescript
+// Run specific analysis
 const zombies = await k8sOpsServer.executeTool(
   'detect-zombie-workloads',
-  { 
-    snapshot: clusterSnapshot,
-    thresholds: {
-      idleDaysThreshold: 7,          // Abandoned after 7 days
-      crashLoopRestartThreshold: 5,   // After 5 restarts
-      stuckPodHours: 24              // Pending > 24h
-    }
-  },
+  { snapshot: snapshot.data },
   { k8sMode: 'kubeconfig' }
 );
-
-// result.data contains:
-// - summary: "Found 3 zombie workloads..."
-// - zombieCount: 3
-// - zombies: Array with details and suggested actions
-```
-
-### 4. Istio Traffic Analysis (`analyze-istio-traffic`)
-
-**What it does**: Analyzes Istio configurations for issues.
-
-**Detects**:
-- 🎯 Unused subsets in DestinationRules
-- ❓ Missing subsets referenced in VirtualServices
-- 🔀 Stale mirror routes (forgot to remove after testing)
-- ⚖️ Misconfigured route weights (not summing to 100)
-- 🔒 Inconsistent mTLS settings
-
-**Example**:
-```typescript
-const istioAnalysis = await k8sOpsServer.executeTool(
-  'analyze-istio-traffic',
-  { 
-    snapshot: clusterSnapshot,
-    options: {
-      includeTopology: true, // Generate traffic graph
-      checkMTLS: true        // Check mTLS consistency
-    }
-  },
-  { k8sMode: 'kubeconfig' }
-);
-
-// result.data contains:
-// - summary: "Analyzed 10 VirtualServices, found 2 issues..."
-// - issues: Array of issues with severity and fixes
-// - topology: Traffic graph (nodes and edges)
 ```
 
 ## Integration with Neurolink
@@ -175,14 +171,17 @@ import { registerWithNeurolink } from '@cmd-err/k8s-ops-agent';
 await registerWithNeurolink(neurolinkInstance);
 ```
 
-### Natural Language Examples
+### Use the Agent Class
 
-Once registered, you can ask questions like:
+```typescript
+import { K8sOpsAgent } from '@cmd-err/k8s-ops-agent';
 
-- "Show me the cluster overview"
-- "Find any cost optimization opportunities"
-- "Are there any zombie workloads in production?"
-- "Check if my Istio configuration has any issues"
+// The agent can be exposed to Neurolink for LLM orchestration
+const agent = new K8sOpsAgent({ k8sMode: 'incluster' });
+
+// Neurolink can call agent.run() with different intents
+// based on user's natural language requests
+```
 
 ## Deployment Options
 
@@ -190,7 +189,7 @@ Once registered, you can ask questions like:
 
 ```bash
 # Uses ~/.kube/config automatically
-npm run dev:snapshot
+npm run dev:agent:full
 ```
 
 ### Option 2: In-Cluster Deployment
@@ -207,41 +206,53 @@ Environment variables:
 - `K8S_MODE=incluster` - Use in-cluster auth
 - `PORT=3000` - HTTP server port
 
-## API Reference
+## Example Output
 
-### HTTP Endpoints (when running server)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Server info |
-| `/health` | GET | Health check |
-| `/tools` | GET | List available tools |
-| `/tools/:id` | GET | Get tool info |
-| `/tools/:id/execute` | POST | Execute a tool |
-
-### Tool Input Schemas
-
-All inputs are validated with Zod schemas. Invalid input returns:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid input",
-    "details": { ... }
-  }
-}
 ```
+🤖 K8s Ops Agent Demo
+============================================================
 
-## Roadmap (Post-MVP)
+📡 Kubernetes Mode: kubeconfig
 
-- [ ] **Metrics Integration**: Pull actual usage from Prometheus/metrics-server
-- [ ] **Alerting**: Send alerts for detected issues
-- [ ] **Remediation**: Suggest kubectl commands or apply fixes
-- [ ] **Multi-cluster**: Support for multiple clusters
-- [ ] **Historical Analysis**: Track changes over time
-- [ ] **Custom Rules**: User-defined analysis rules
+🎯 Running intent: full-cluster-report
+
+🔄 Running get-cluster-snapshot...
+   ✅ get-cluster-snapshot completed in 1234ms
+🔄 Running analyze-cost-optimization...
+   ✅ analyze-cost-optimization completed in 56ms
+🔄 Running detect-zombie-workloads...
+   ✅ detect-zombie-workloads completed in 23ms
+🔄 Running analyze-istio-traffic...
+   ✅ analyze-istio-traffic completed in 12ms
+
+============================================================
+📊 AGENT RESULTS
+============================================================
+
+⚠️ Cluster needs attention: 2 high-priority issues found
+
+📈 Health Score: 72/100 (warning)
+
+📊 Statistics:
+   Nodes: 3/3 healthy
+   Pods: 45/47 running
+   Zombies: 2
+   Cost Issues: 3
+   Istio Issues: 1
+
+💰 Potential Monthly Savings: $127.50
+
+🎯 Top Priorities:
+   1. overprovision: api-server
+   2. Zombie Pod: stuck-job-abc123
+   3. unused-subset: canary
+
+📝 Narrative:
+Analyzed cluster with 3 nodes and 47 pods across 5 namespaces.
+2 pod(s) are not running properly. Found 2 zombie workload(s)
+that should be investigated. Identified 3 cost optimization
+opportunities with potential savings of ~$127.50/month.
+```
 
 ## Troubleshooting
 
@@ -258,10 +269,7 @@ Check RBAC permissions. The agent needs read access to core resources and Istio 
 
 ### Istio resources not found
 
-If Istio isn't installed, enable graceful handling:
-```typescript
-{ includeIstio: false }  // Skip Istio resources
-```
+If Istio isn't installed, the agent handles this gracefully and skips Istio analysis.
 
 ## Support
 

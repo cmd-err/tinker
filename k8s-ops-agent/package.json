@@ -10,6 +10,12 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\" || exit 0",
     "test": "echo \"No tests yet\" && exit 0",
     "dev:snapshot": "node dist/dev/runClusterSnapshot.js",
+    "dev:agent": "node dist/dev/runAgent.js",
+    "dev:agent:health": "node dist/dev/runAgent.js cluster-health-check",
+    "dev:agent:cost": "node dist/dev/runAgent.js cost-optimization",
+    "dev:agent:zombies": "node dist/dev/runAgent.js zombie-detection",
+    "dev:agent:istio": "node dist/dev/runAgent.js istio-analysis",
+    "dev:agent:full": "node dist/dev/runAgent.js full-cluster-report",
     "start": "node dist/server.js",
     "start:dev": "K8S_MODE=kubeconfig node dist/server.js"
   },

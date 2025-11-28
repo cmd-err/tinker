@@ -3,7 +3,7 @@
  * 
  * This file provides a complete Neurolink-based agent that:
  * 1. Uses the MCP tools for K8s operations
- * 2. Uses an LLM (via Neurolink) for reasoning
+ * 2. Uses an LLM (via Neurolink) for reasoning and orchestration
  * 3. Orchestrates multi-step analysis workflows
  * 4. Generates human-readable summaries
  */
@@ -107,12 +107,18 @@ export interface ToolInfo {
  * 
  * Combines the K8sOpsAgent with Neurolink's LLM capabilities for:
  * - Natural language understanding
+ * - LLM-driven tool orchestration (when Neurolink instance provided)
  * - Intelligent summarization
  * - Context-aware recommendations
+ * 
+ * There are two modes of operation:
+ * 1. With Neurolink instance: Uses LLM to orchestrate tool calls via neurolink.generate()
+ * 2. Without Neurolink: Uses rule-based intent detection and built-in summarization
  */
 export class K8sOpsNeurolinkAgent {
   private agent: K8sOpsAgent;
   private provider: NeurolinkProvider | null = null;
+  private neurolink: NeuroLinkInstance | null = null;
   private k8sMode: "kubeconfig" | "incluster";
 
   constructor(options: {
@@ -128,10 +134,22 @@ export class K8sOpsNeurolinkAgent {
       logger: console.log.bind(console),
     });
 
+    // Store Neurolink instance for LLM orchestration
+    if (options.neurolink) {
+      this.neurolink = options.neurolink;
+    }
+
     // Accept provider directly if passed
     if (options.provider) {
       this.provider = options.provider;
     }
+  }
+
+  /**
+   * Set the Neurolink instance for LLM-powered orchestration
+   */
+  setNeurolink(neurolink: NeuroLinkInstance): void {
+    this.neurolink = neurolink;
   }
 
   /**
@@ -143,10 +161,72 @@ export class K8sOpsNeurolinkAgent {
 
   /**
    * Process a natural language query about the cluster
+   * 
+   * If a Neurolink instance is set, uses LLM to orchestrate tool calls.
+   * Otherwise, uses rule-based intent detection.
    */
   async query(userQuery: string): Promise<string> {
     console.log(`\n🤖 Processing query: "${userQuery}"\n`);
 
+    // If we have a Neurolink instance, use LLM orchestration
+    if (this.neurolink) {
+      return await this.queryWithNeurolink(userQuery);
+    }
+
+    // Otherwise, use rule-based orchestration
+    return await this.queryWithRules(userQuery);
+  }
+
+  /**
+   * Query using Neurolink LLM orchestration
+   * The LLM decides which tools to call based on the query
+   */
+  private async queryWithNeurolink(userQuery: string): Promise<string> {
+    if (!this.neurolink) {
+      throw new Error("Neurolink instance not set");
+    }
+
+    console.log("🧠 Using Neurolink LLM for orchestration...\n");
+
+    try {
+      const result = await this.neurolink.generate({
+        input: {
+          text: userQuery
+        },
+        systemPrompt: `You are a Kubernetes operations expert assistant with access to cluster analysis tools.
+
+Available tools:
+- get-cluster-snapshot: Fetches nodes, pods, workloads, HPAs, and Istio resources from the K8s cluster
+- analyze-cost-optimization: Identifies underutilized nodes, overprovisioned workloads, and idle namespaces with savings estimates
+- detect-zombie-workloads: Finds crash-looping pods, failed pods, stuck pending pods, and unhealthy nodes
+- analyze-istio-traffic: Detects unused/missing subsets, orphan VirtualServices, and misconfigured routes
+
+When analyzing the cluster:
+1. First get a cluster snapshot to understand the current state
+2. Then run the appropriate analysis tools based on the user's request
+3. Synthesize the findings into a clear, actionable report
+4. Prioritize issues by severity and provide specific recommendations`,
+        temperature: 0.3,
+        maxTokens: 4000,
+      });
+
+      // Log tool usage if available
+      if (result.toolsUsed && result.toolsUsed.length > 0) {
+        console.log(`🔧 LLM used tools: ${result.toolsUsed.join(", ")}`);
+      }
+
+      return result.content;
+
+    } catch (error) {
+      console.error("⚠️ Neurolink LLM orchestration failed, falling back to rules:", error);
+      return await this.queryWithRules(userQuery);
+    }
+  }
+
+  /**
+   * Query using rule-based intent detection (no LLM)
+   */
+  private async queryWithRules(userQuery: string): Promise<string> {
     // Determine intent from query
     const intent = this.parseIntent(userQuery);
     console.log(`📋 Detected intent: ${intent}`);

@@ -12,62 +12,61 @@
  * - Have kubectl configured with access to a cluster
  */
 
-// Note: This is the full integration example.
-// When Neurolink SDK is available, uncomment the imports below:
-// import { createBestAIProvider, Neurolink } from "@juspay/neurolink";
-// import { K8sOpsNeurolinkAgent, registerWithNeurolink } from "@cmd-err/k8s-ops-agent";
-
-// For now, we use the built-in agent without Neurolink
-import { K8sOpsNeurolinkAgent } from "@cmd-err/k8s-ops-agent";
+import { NeuroLink } from "@juspay/neurolink";
+import { K8sOpsNeurolinkAgent, registerK8sOpsWithNeurolink, type NeuroLinkInstance } from "@cmd-err/k8s-ops-agent";
 
 async function main() {
   console.log("╔════════════════════════════════════════════════════════════════╗");
   console.log("║       Neurolink + K8s Ops Agent - Full Demo                     ║");
   console.log("╚════════════════════════════════════════════════════════════════╝\n");
 
-  // ============ OPTION 1: With Neurolink SDK (when available) ============
-  /*
-  // Initialize Neurolink with best available provider
-  const provider = createBestAIProvider();
-  const neurolink = new Neurolink({ provider });
+  // Check if we have an LLM provider configured
+  const hasLLMProvider = !!(process.env.OPENAI_API_KEY || process.env.GOOGLE_AI_API_KEY);
 
-  // Register K8s Ops tools with Neurolink
-  await registerWithNeurolink(neurolink);
+  if (hasLLMProvider) {
+    console.log("✅ LLM provider detected - running with Neurolink SDK\n");
 
-  // Create agent with LLM capabilities
-  const agent = new K8sOpsNeurolinkAgent({
-    k8sMode: "kubeconfig",
-    neurolink: neurolink,
-  });
-  */
+    // ============ OPTION 1: With Neurolink SDK ============
+    // Initialize Neurolink (it auto-detects the best provider from env vars)
+    const neurolink = new NeuroLink({
+      enableOrchestration: true,
+    });
 
-  // ============ OPTION 2: Without Neurolink SDK ============
-  // Create agent without LLM (uses built-in summarization)
-  const agent = new K8sOpsNeurolinkAgent({
-    k8sMode: (process.env.K8S_MODE as "kubeconfig" | "incluster") || "kubeconfig",
-  });
+    // Register K8s Ops tools with Neurolink as an in-memory MCP server
+    // Cast to our interface for type compatibility
+    await registerK8sOpsWithNeurolink(neurolink as unknown as NeuroLinkInstance);
 
-  console.log("ℹ️  Running demo without Neurolink SDK\n");
-  console.log("   To enable LLM features, set GOOGLE_AI_API_KEY and uncomment");
-  console.log("   the Neurolink initialization code above.\n");
+    // Create agent with LLM capabilities
+    const agent = new K8sOpsNeurolinkAgent({
+      k8sMode: (process.env.K8S_MODE as "kubeconfig" | "incluster") || "kubeconfig",
+    });
 
-  // ============ Demo Queries ============
-  const queries = [
-    // "Give me a full health report",
-    // "What's wasting money in my cluster?",
-    // "Find zombie workloads",
-    // "Check Istio configuration",
-  ];
+    // Run with Neurolink for LLM-powered summarization
+    console.log("🚀 Running full cluster analysis with LLM summarization...\n");
+    const result = await agent.query("Give me a complete cluster health and optimization report");
 
-  // Run a default full analysis
-  console.log("🚀 Running full cluster analysis...\n");
-  
-  const result = await agent.query("Give me a complete cluster health and optimization report");
+    console.log("━".repeat(70));
+    console.log("\n📊 ANALYSIS RESULT:\n");
+    console.log(result);
+    console.log("\n" + "━".repeat(70));
+  } else {
+    console.log("ℹ️  No LLM provider detected - running with built-in summarization\n");
+    console.log("   To enable LLM features, set GOOGLE_AI_API_KEY or OPENAI_API_KEY\n");
 
-  console.log("━".repeat(70));
-  console.log("\n📊 ANALYSIS RESULT:\n");
-  console.log(result);
-  console.log("\n" + "━".repeat(70));
+    // ============ OPTION 2: Without Neurolink SDK ============
+    // Create agent without LLM (uses built-in summarization)
+    const agent = new K8sOpsNeurolinkAgent({
+      k8sMode: (process.env.K8S_MODE as "kubeconfig" | "incluster") || "kubeconfig",
+    });
+
+    console.log("🚀 Running full cluster analysis...\n");
+    const result = await agent.query("Give me a complete cluster health and optimization report");
+
+    console.log("━".repeat(70));
+    console.log("\n📊 ANALYSIS RESULT:\n");
+    console.log(result);
+    console.log("\n" + "━".repeat(70));
+  }
 
   // Show how to use different intents
   console.log("\n💡 You can also run specific analyses:");

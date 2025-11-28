@@ -48,22 +48,24 @@ export {
   type K8sClients,
 } from "./mcp/k8sClient.js";
 
-// Export Neurolink integration
+// Export Neurolink integration (legacy)
 export {
   getK8sOpsServer,
   getNeuroLinkServerConfig,
-  registerWithNeurolink,
   type NeurolinkMCPServerConfig,
   type Neurolink,
 } from "./sdk/neurolinkIntegration.js";
 
-// Export Neurolink Agent
+// Export Neurolink Agent (primary integration)
 export {
   K8sOpsNeurolinkAgent,
   createK8sOpsNeurolinkAgent,
-  registerWithNeurolink as registerK8sOpsWithNeurolink,
+  registerK8sOpsWithNeurolink,
+  registerWithNeurolink,
   type NeurolinkProvider,
-  type NeurolinkInstance,
+  type NeuroLinkInstance,
+  type MCPServerInfo,
+  type MCPToolDefinition,
 } from "./sdk/neurolinkAgent.js";
 
 // Export Agent (orchestration layer)

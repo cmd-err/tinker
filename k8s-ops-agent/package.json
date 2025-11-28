@@ -47,14 +47,14 @@
   "author": "cmd-err",
   "license": "MIT",
   "dependencies": {
+    "@juspay/neurolink": "^8.2.0",
     "@kubernetes/client-node": "^1.4.0",
     "@modelcontextprotocol/sdk": "^1.11.0",
-    "@juspay/neurolink": "^8.2.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.6.0",
-    "eslint": "^9.0.0"
+    "@types/node": "^22.19.1",
+    "eslint": "^9.0.0",
+    "typescript": "^5.6.0"
   }
 }

@@ -11,35 +11,95 @@
 import { K8sOpsAgent } from "../agent/k8sOpsAgent.js";
 import { k8sOpsServer } from "../mcp/k8sOpsServer.js";
 
-// Types for Neurolink integration
+// Types for Neurolink integration - matching the actual @juspay/neurolink SDK
 export interface NeurolinkProvider {
   generate: (options: {
     prompt: string;
     output?: { format: "text" | "json" };
     system?: string;
-  }) => Promise<{ text: string }>;
+  }) => Promise<{ text: string; content?: string }>;
 }
 
-export interface NeurolinkInstance {
+/**
+ * NeuroLink instance interface - matches the actual @juspay/neurolink SDK
+ * See: https://github.com/juspay/neurolink/blob/main/src/lib/neurolink.ts
+ * Using 'unknown' for MCPServerInfo to avoid type conflicts with external package
+ */
+export interface NeuroLinkInstance {
   addInMemoryMCPServer: (
     serverId: string,
-    config: NeurolinkMCPConfig
+    serverInfo: unknown
   ) => Promise<void>;
-  getProvider: () => NeurolinkProvider;
+  generate: (optionsOrPrompt: GenerateOptions | string) => Promise<GenerateResult>;
+  stream: (options: StreamOptions) => Promise<StreamResult>;
+  executeTool: <T = unknown>(
+    toolName: string,
+    params?: unknown,
+    options?: { timeout?: number; maxRetries?: number }
+  ) => Promise<T>;
+  getAllAvailableTools: () => Promise<ToolInfo[]>;
 }
 
-export interface NeurolinkMCPConfig {
-  server: {
-    title: string;
-    description: string;
-    tools: unknown[];
+// MCPServerInfo matches Neurolink's expected format
+export interface MCPServerInfo {
+  id: string;
+  name: string;
+  description: string;
+  transport: "stdio" | "sse" | "streamable-http";
+  status?: "connected" | "disconnected" | "error" | "connecting";
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  tools?: MCPToolDefinition[];
+  metadata?: {
+    category?: string;
+    version?: string;
+    provider?: string;
+    [key: string]: unknown;
   };
-  category: string;
-  metadata: {
-    version: string;
-    author: string;
-    lastUpdated: string;
-  };
+}
+
+export interface MCPToolDefinition {
+  name: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+  execute?: (params: unknown, context?: unknown) => Promise<unknown>;
+}
+
+export interface GenerateOptions {
+  input: { text: string };
+  provider?: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
+  disableTools?: boolean;
+}
+
+export interface GenerateResult {
+  content: string;
+  provider: string;
+  model?: string;
+  usage?: { input: number; output: number; total: number };
+  toolsUsed?: string[];
+}
+
+export interface StreamOptions {
+  input: { text: string };
+  provider?: string;
+  model?: string;
+}
+
+export interface StreamResult {
+  stream: AsyncIterable<{ content: string }>;
+  provider: string;
+}
+
+export interface ToolInfo {
+  name: string;
+  description?: string;
+  serverId?: string;
+  inputSchema?: Record<string, unknown>;
 }
 
 /**
@@ -57,7 +117,8 @@ export class K8sOpsNeurolinkAgent {
 
   constructor(options: {
     k8sMode?: "kubeconfig" | "incluster";
-    neurolink?: NeurolinkInstance;
+    neurolink?: NeuroLinkInstance;
+    provider?: NeurolinkProvider;
   } = {}) {
     this.k8sMode = options.k8sMode ?? "kubeconfig";
     this.agent = new K8sOpsAgent({
@@ -67,8 +128,9 @@ export class K8sOpsNeurolinkAgent {
       logger: console.log.bind(console),
     });
 
-    if (options.neurolink) {
-      this.provider = options.neurolink.getProvider();
+    // Accept provider directly if passed
+    if (options.provider) {
+      this.provider = options.provider;
     }
   }
 
@@ -234,39 +296,54 @@ Please provide a concise, actionable response to the user's query. Focus on:
 }
 
 /**
- * Register K8s Ops tools with Neurolink
+ * Register K8s Ops tools with Neurolink using the correct MCPServerInfo format
+ * @param neurolink - NeuroLink instance from @juspay/neurolink
  */
-export async function registerWithNeurolink(neurolink: NeurolinkInstance): Promise<void> {
-  const config: NeurolinkMCPConfig = {
-    server: {
-      title: k8sOpsServer.title,
-      description: k8sOpsServer.description,
-      tools: k8sOpsServer.tools.map((tool) => ({
-        id: tool.id,
-        title: tool.title,
-        description: tool.description,
-        inputSchema: tool.inputSchema,
-        outputSchema: tool.outputSchema,
-      })),
-    },
-    category: k8sOpsServer.category,
+export async function registerK8sOpsWithNeurolink(neurolink: NeuroLinkInstance): Promise<void> {
+  // Convert our tools to MCPServerInfo format expected by Neurolink
+  const serverInfo: MCPServerInfo = {
+    id: "k8s-ops",
+    name: k8sOpsServer.title,
+    description: k8sOpsServer.description,
+    transport: "stdio",
+    status: "connected",
+    tools: k8sOpsServer.tools.map((tool) => ({
+      name: tool.id,
+      description: tool.description,
+      inputSchema: tool.inputSchema as Record<string, unknown>,
+      execute: async (params: unknown) => {
+        const result = await k8sOpsServer.executeTool(
+          tool.id,
+          params as Record<string, unknown>,
+          { k8sMode: "kubeconfig" }
+        );
+        return result;
+      },
+    })),
     metadata: {
+      category: k8sOpsServer.category,
       version: k8sOpsServer.version,
-      author: "cmd-err",
-      lastUpdated: new Date().toISOString(),
+      provider: "k8s-ops-agent",
     },
   };
 
-  await neurolink.addInMemoryMCPServer("k8s-ops", config);
+  await neurolink.addInMemoryMCPServer("k8s-ops", serverInfo);
   console.log("✅ K8s Ops Server registered with Neurolink");
 }
+
+/**
+ * Legacy function name for backward compatibility
+ * @deprecated Use registerK8sOpsWithNeurolink instead
+ */
+export const registerWithNeurolink = registerK8sOpsWithNeurolink;
 
 /**
  * Create a standalone Neurolink agent for K8s operations
  */
 export function createK8sOpsNeurolinkAgent(options?: {
   k8sMode?: "kubeconfig" | "incluster";
-  neurolink?: NeurolinkInstance;
+  neurolink?: NeuroLinkInstance;
+  provider?: NeurolinkProvider;
 }): K8sOpsNeurolinkAgent {
   return new K8sOpsNeurolinkAgent(options);
 }

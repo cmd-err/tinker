@@ -2,8 +2,23 @@
   "name": "@cmd-err/k8s-ops-agent",
   "version": "0.1.0",
   "description": "Kubernetes Cost & Traffic Ops Agent integrated with Neurolink via MCP",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    },
+    "./agent": {
+      "types": "./dist/agent/index.d.ts",
+      "import": "./dist/agent/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -w -p tsconfig.json",
@@ -16,8 +31,10 @@
     "dev:agent:zombies": "node dist/dev/runAgent.js zombie-detection",
     "dev:agent:istio": "node dist/dev/runAgent.js istio-analysis",
     "dev:agent:full": "node dist/dev/runAgent.js full-cluster-report",
+    "dev:neurolink": "node dist/dev/runNeurolinkAgent.js",
     "start": "node dist/server.js",
-    "start:dev": "K8S_MODE=kubeconfig node dist/server.js"
+    "start:dev": "K8S_MODE=kubeconfig node dist/server.js",
+    "start:mcp": "node dist/mcpServer.js"
   },
   "keywords": [
     "kubernetes",
@@ -31,6 +48,8 @@
   "license": "MIT",
   "dependencies": {
     "@kubernetes/client-node": "^1.4.0",
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "@juspay/neurolink": "^8.2.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

@@ -1,13 +1,34 @@
 # K8s Ops Agent
 
-A **Kubernetes Cost & Traffic Ops Agent** integrated with **Neurolink** via MCP (Model Context Protocol). This agent provides intelligent analysis of Kubernetes clusters for cost optimization, zombie workload detection, and Istio traffic analysis.
+A **Kubernetes Cost & Traffic Ops AI Agent** integrated with **Neurolink** via MCP (Model Context Protocol). This agent provides intelligent analysis of Kubernetes clusters for cost optimization, zombie workload detection, and Istio traffic analysis.
+
+## 🚀 What This Is
+
+This is a **complete AI agent** that:
+1. **Orchestrates** multiple analysis tools
+2. **Reasons** about cluster state
+3. **Generates** executive summaries and recommendations
+4. **Integrates** with Neurolink for LLM-powered workflows
+
+```
+User: "What's wasting money in my cluster?"
+         ↓
+    [K8sOpsAgent] → plans tools → executes → aggregates
+         ↓
+    [Neurolink/LLM] → summarizes results
+         ↓
+User: "3 underutilized nodes found, ~$150/month savings possible"
+```
 
 ## Features
 
-- **Cluster Snapshot** (`get-cluster-snapshot`): Fetch comprehensive cluster state including nodes, namespaces, workloads, pods, HPAs, and Istio resources.
-- **Cost Optimization** (`analyze-cost-optimization`): Identify underutilized nodes, overprovisioned workloads, and idle namespaces.
-- **Zombie Detection** (`detect-zombie-workloads`): Find crash-looping pods, failed workloads, unhealthy nodes, and abandoned resources.
-- **Istio Traffic Analysis** (`analyze-istio-traffic`): Detect misconfigurations in VirtualServices, DestinationRules, and Gateways.
+- **🤖 Agent Layer**: Orchestrates multi-step analysis workflows
+- **📊 Cluster Snapshot** (`get-cluster-snapshot`): Fetch comprehensive cluster state
+- **💰 Cost Optimization** (`analyze-cost-optimization`): Find savings opportunities
+- **🧟 Zombie Detection** (`detect-zombie-workloads`): Identify stuck/failed workloads
+- **🌐 Istio Traffic Analysis** (`analyze-istio-traffic`): Detect misconfigurations
+- **🔗 MCP Server**: Standard MCP interface for any MCP host
+- **🔌 Neurolink Integration**: Full SDK integration with LLM summarization
 
 ## Quick Start
 
@@ -16,25 +37,147 @@ A **Kubernetes Cost & Traffic Ops Agent** integrated with **Neurolink** via MCP 
 - Node.js 18+
 - A Kubernetes cluster (or kubeconfig for local development)
 - (Optional) Istio installed for traffic analysis
+- (Optional) Neurolink SDK with API key for LLM features
 
 ### Installation
 
 ```bash
 cd k8s-ops-agent
-pnpm install
-pnpm build
+npm install
+npm run build
 ```
 
-### Local Development
-
-Run the test harness against your local kubeconfig:
+### Run the Agent
 
 ```bash
-# Build and run
-pnpm build && pnpm dev:snapshot
+# Full cluster report
+npm run dev:agent:full
 
-# With full JSON output
-FULL_OUTPUT=true pnpm dev:snapshot
+# Cost optimization analysis
+npm run dev:agent:cost
+
+# Zombie detection
+npm run dev:agent:zombies
+
+# Quick health check
+npm run dev:agent:health
+```
+
+### Run with Neurolink
+
+```bash
+# Natural language queries
+npm run dev:neurolink -- "What's wasting money in my cluster?"
+npm run dev:neurolink -- "Find zombie workloads"
+npm run dev:neurolink -- "Check the Istio configuration"
+```
+
+### Run as MCP Server
+
+```bash
+# Start the MCP server (stdio transport)
+npm run start:mcp
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     K8sOpsNeurolinkAgent                        │
+│  Natural Language → Intent → Orchestration → LLM Summary        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        K8sOpsAgent                              │
+│  Intent Planning → Tool Execution → Result Aggregation          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      MCP Server                                 │
+│  Tool Discovery → Input Validation → Tool Routing               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        Tools                                    │
+│  get-cluster-snapshot | analyze-cost | detect-zombies | istio   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Kubernetes API                                │
+│  Nodes | Pods | Deployments | HPAs | Istio CRDs                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Usage Examples
+
+### 1. Agent (Recommended)
+
+```typescript
+import { K8sOpsAgent } from '@cmd-err/k8s-ops-agent';
+
+const agent = new K8sOpsAgent({ k8sMode: 'kubeconfig' });
+
+// Run full analysis
+const result = await agent.run({ intent: 'full-cluster-report' });
+
+console.log(result.summary.headline);
+// "⚠️ Cluster needs attention: 3 high-priority issues found"
+
+console.log(result.summary.healthScore);
+// 72
+
+console.log(result.findings.slice(0, 3));
+// Top 3 findings with severity, description, and suggested actions
+```
+
+### 2. Neurolink Agent (with LLM)
+
+```typescript
+import { K8sOpsNeurolinkAgent } from '@cmd-err/k8s-ops-agent';
+import { createBestAIProvider } from '@juspay/neurolink';
+
+const agent = new K8sOpsNeurolinkAgent({
+  k8sMode: 'kubeconfig',
+  neurolink: { getProvider: () => createBestAIProvider() },
+});
+
+// Natural language query
+const response = await agent.query("What's eating up resources in my cluster?");
+console.log(response);
+// Detailed, context-aware response from LLM
+```
+
+### 3. MCP Server (for any MCP host)
+
+```typescript
+// Use with Claude Desktop, Cursor, or any MCP host
+// Configure in your MCP host settings:
+{
+  "mcpServers": {
+    "k8s-ops": {
+      "command": "node",
+      "args": ["/path/to/k8s-ops-agent/dist/mcpServer.js"]
+    }
+  }
+}
+```
+
+### 4. Direct Tool Execution
+
+```typescript
+import { k8sOpsServer } from '@cmd-err/k8s-ops-agent';
+
+const context = { k8sMode: 'kubeconfig', timeout: 30000 };
+
+const result = await k8sOpsServer.executeTool(
+  'get-cluster-snapshot',
+  { includeIstio: true },
+  context
+);
 ```
 
 ## Project Structure
@@ -44,168 +187,56 @@ k8s-ops-agent/
 ├── src/
 │   ├── index.ts                 # Main exports
 │   ├── types.ts                 # Type definitions
+│   ├── mcpServer.ts             # MCP server (stdio transport)
+│   ├── server.ts                # HTTP server for in-cluster
+│   ├── agent/
+│   │   ├── k8sOpsAgent.ts       # Agent orchestration
+│   │   └── agentTypes.ts        # Agent type definitions
 │   ├── mcp/
 │   │   ├── k8sOpsServer.ts      # MCP server abstraction
-│   │   ├── k8sClient.ts         # Kubernetes client helper
-│   │   └── tools/
-│   │       ├── index.ts
-│   │       ├── getClusterSnapshot.ts
-│   │       ├── analyzeCostOptimization.ts
-│   │       ├── detectZombieWorkloads.ts
-│   │       └── analyzeIstioTraffic.ts
+│   │   ├── k8sClient.ts         # Kubernetes client
+│   │   └── tools/               # Tool implementations
 │   ├── sdk/
-│   │   └── neurolinkIntegration.ts
+│   │   ├── neurolinkIntegration.ts  # Basic Neurolink integration
+│   │   └── neurolinkAgent.ts    # Full Neurolink agent
 │   └── dev/
-│       └── runClusterSnapshot.ts
+│       ├── runAgent.ts          # Agent demo
+│       └── runNeurolinkAgent.ts # Neurolink demo
 ├── k8s/                         # Kubernetes manifests
-├── package.json
-├── tsconfig.json
-└── README.md
+├── docs/
+│   ├── MVP.md                   # Quick start guide
+│   └── ARCHITECTURE.md          # System architecture
+└── package.json
 ```
 
-## Tools Reference
+## Available Intents
 
-### `get-cluster-snapshot`
-
-Fetches a comprehensive snapshot of the Kubernetes cluster.
-
-**Input:**
-```typescript
-{
-  namespaces?: string[];         // Filter by namespaces (default: all)
-  includeIstio?: boolean;        // Include Istio resources (default: true)
-  includeSystemNamespaces?: boolean;  // Include kube-system etc (default: false)
-}
-```
-
-**Output:** `ClusterSnapshot` containing nodes, namespaces, workloads, pods, HPAs, and Istio resources.
-
-### `analyze-cost-optimization`
-
-Analyzes cluster resources for cost optimization opportunities.
-
-**Input:**
-```typescript
-{
-  snapshot: ClusterSnapshot;     // From get-cluster-snapshot
-  thresholds?: {
-    nodeUtilizationLow?: number;      // Default: 0.3
-    workloadOverprovisionRatio?: number;  // Default: 2
-    idlePodThresholdHours?: number;   // Default: 24
-  };
-  pricingConfig?: {
-    cpuCoreHourCost?: number;    // Default: 0.05
-    memoryGiBHourCost?: number;  // Default: 0.01
-  };
-}
-```
-
-**Output:** `CostAnalysisResult` with recommendations and potential savings.
-
-### `detect-zombie-workloads`
-
-Identifies zombie workloads in the cluster.
-
-**Input:**
-```typescript
-{
-  snapshot: ClusterSnapshot;
-  thresholds?: {
-    idleDaysThreshold?: number;       // Default: 7
-    crashLoopRestartThreshold?: number;  // Default: 5
-    stuckPodHours?: number;           // Default: 24
-  };
-}
-```
-
-**Output:** `ZombieDetectionResult` with zombie workloads and severity ratings.
-
-### `analyze-istio-traffic`
-
-Analyzes Istio configurations for issues.
-
-**Input:**
-```typescript
-{
-  snapshot: ClusterSnapshot;     // Must include Istio resources
-  options?: {
-    includeTopology?: boolean;   // Default: true
-    checkMTLS?: boolean;         // Default: true
-  };
-}
-```
-
-**Output:** `IstioTrafficAnalysisResult` with issues and optional traffic topology graph.
-
-## Neurolink Integration
-
-### Basic Usage
-
-```typescript
-import { getK8sOpsServer, registerWithNeurolink } from '@cmd-err/k8s-ops-agent';
-
-// Get the server instance
-const server = getK8sOpsServer();
-
-// Register with Neurolink
-await registerWithNeurolink(neurolinkInstance);
-```
-
-### Direct Tool Execution
-
-```typescript
-import { k8sOpsServer } from '@cmd-err/k8s-ops-agent';
-
-const context = {
-  k8sMode: 'kubeconfig',
-  timeout: 30000,
-};
-
-// Execute a tool
-const result = await k8sOpsServer.executeTool(
-  'get-cluster-snapshot',
-  { includeIstio: true },
-  context
-);
-```
+| Intent | Description | Tools Used |
+|--------|-------------|------------|
+| `cluster-health-check` | Quick health status | snapshot → zombies |
+| `cost-optimization` | Find savings | snapshot → cost |
+| `zombie-detection` | Find stuck workloads | snapshot → zombies |
+| `istio-analysis` | Check traffic config | snapshot → istio |
+| `full-cluster-report` | Complete audit | snapshot → all |
 
 ## In-Cluster Deployment
 
-### Environment Variables
-
-- `K8S_MODE`: Set to `incluster` for in-cluster deployment, or `kubeconfig` for local development.
-
-### Kubernetes Manifests
-
-Deploy using the manifests in `k8s/`:
-
 ```bash
+# Deploy with RBAC
 kubectl apply -f k8s/
+
+# Or run the server
+K8S_MODE=incluster npm run start
 ```
 
-Required RBAC permissions:
-- Read access to: `nodes`, `pods`, `services`, `deployments`, `statefulsets`, `daemonsets`, `horizontalpodautoscalers`, `namespaces`
-- Read access to Istio CRDs: `virtualservices`, `destinationrules`, `gateways`
+## Environment Variables
 
-## Development
-
-### Building
-
-```bash
-pnpm build
-```
-
-### Linting
-
-```bash
-pnpm lint
-```
-
-### Testing
-
-```bash
-pnpm test
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `K8S_MODE` | `kubeconfig` or `incluster` | `kubeconfig` |
+| `PORT` | HTTP server port | `3000` |
+| `GOOGLE_AI_API_KEY` | For Neurolink LLM | - |
+| `OPENAI_API_KEY` | Alternative LLM provider | - |
 
 ## License
 

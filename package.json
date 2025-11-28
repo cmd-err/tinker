@@ -1,0 +1,28 @@
+{
+  "name": "tinker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tinker Monorepo - AI Agents and MCP Servers",
+  "workspaces": [
+    "k8s-ops-agent",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces",
+    "test": "npm run test --workspaces",
+    "dev:k8s-agent": "npm run dev:agent:full --workspace=@cmd-err/k8s-ops-agent"
+  },
+  "keywords": [
+    "kubernetes",
+    "mcp",
+    "agent",
+    "neurolink",
+    "monorepo"
+  ],
+  "author": "cmd-err",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

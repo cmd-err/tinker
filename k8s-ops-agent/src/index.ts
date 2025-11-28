@@ -57,6 +57,15 @@ export {
   type Neurolink,
 } from "./sdk/neurolinkIntegration.js";
 
+// Export Neurolink Agent
+export {
+  K8sOpsNeurolinkAgent,
+  createK8sOpsNeurolinkAgent,
+  registerWithNeurolink as registerK8sOpsWithNeurolink,
+  type NeurolinkProvider,
+  type NeurolinkInstance,
+} from "./sdk/neurolinkAgent.js";
+
 // Export Agent (orchestration layer)
 export {
   K8sOpsAgent,

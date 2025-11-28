@@ -1,0 +1,20 @@
+{
+  "name": "@cmd-err/neurolink-k8s-demo",
+  "version": "0.1.0",
+  "description": "Demo: Using K8s Ops Agent with Neurolink",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "demo": "npm run build && npm run start"
+  },
+  "dependencies": {
+    "@cmd-err/k8s-ops-agent": "file:../../k8s-ops-agent",
+    "@juspay/neurolink": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

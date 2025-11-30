@@ -30,6 +30,7 @@ export interface NeuroLinkInstance {
     serverId: string,
     serverInfo: unknown
   ) => Promise<void>;
+  registerTools: (tools: Array<{ name: string; tool: any }> | Record<string, any>) => void;
   generate: (optionsOrPrompt: GenerateOptions | string) => Promise<GenerateResult>;
   stream: (options: StreamOptions) => Promise<StreamResult>;
   executeTool: <T = unknown>(
@@ -180,6 +181,7 @@ export class K8sOpsNeurolinkAgent {
   /**
    * Query using Neurolink LLM orchestration
    * The LLM decides which tools to call based on the query
+   * Uses stream() instead of generate() to match lighthouse pattern
    */
   private async queryWithNeurolink(userQuery: string): Promise<string> {
     if (!this.neurolink) {
@@ -189,7 +191,8 @@ export class K8sOpsNeurolinkAgent {
     console.log("🧠 Using Neurolink LLM for orchestration...\n");
 
     try {
-      const result = await this.neurolink.generate({
+      // Use stream() instead of generate() - matches lighthouse pattern
+      const streamResult = await this.neurolink.stream({
         input: {
           text: userQuery
         },
@@ -208,14 +211,52 @@ When analyzing the cluster:
 4. Prioritize issues by severity and provide specific recommendations`,
         temperature: 0.3,
         maxTokens: 4000,
-      });
+        // Add explicit provider/model like lighthouse does
+        provider: process.env.LLM_PROVIDER || "azure",
+        model: process.env.LLM_MODEL || "gpt-4o-automatic",
+        // CRITICAL: Enable tools for the stream call
+        disableTools: false,
+        // Context for session tracking
+        context: {
+          sessionId: `k8s-demo-${Date.now()}`,
+        },
+      } as any);
 
-      // Log tool usage if available
-      if (result.toolsUsed && result.toolsUsed.length > 0) {
-        console.log(`🔧 LLM used tools: ${result.toolsUsed.join(", ")}`);
+      // Process streaming response like lighthouse (sessionInstanceManager.ts:808-894)
+      let accumulatedResponse = '';
+      let toolsUsed: string[] = [];
+
+      for await (const chunk of streamResult.stream) {
+        if (chunk && typeof chunk === 'object') {
+          // Handle content chunks
+          if ('content' in chunk && typeof chunk.content === 'string') {
+            accumulatedResponse += chunk.content;
+          }
+
+          // Handle tool execution events
+          if ('toolExecution' in chunk && chunk.toolExecution) {
+            const toolExecution = chunk.toolExecution as any;
+            if (toolExecution.type === 'tool:start') {
+              console.log(`🔧 Tool started: ${toolExecution.tool}`);
+              if (!toolsUsed.includes(toolExecution.tool)) {
+                toolsUsed.push(toolExecution.tool);
+              }
+            } else if (toolExecution.type === 'tool:end') {
+              if (toolExecution.error) {
+                console.log(`⚠️  Tool error: ${toolExecution.tool} - ${toolExecution.error}`);
+              } else {
+                console.log(`✅ Tool completed: ${toolExecution.tool}`);
+              }
+            }
+          }
+        }
       }
 
-      return result.content;
+      if (toolsUsed.length > 0) {
+        console.log(`\n🔧 LLM used tools: ${toolsUsed.join(", ")}\n`);
+      }
+
+      return accumulatedResponse;
 
     } catch (error) {
       console.error("⚠️ Neurolink LLM orchestration failed, falling back to rules:", error);
@@ -376,39 +417,136 @@ Please provide a concise, actionable response to the user's query. Focus on:
 }
 
 /**
- * Register K8s Ops tools with Neurolink using the correct MCPServerInfo format
+ * Register K8s Ops tools with Neurolink using InvestigationContext
  * @param neurolink - NeuroLink instance from @juspay/neurolink
+ * @param investigationContext - InvestigationContext for tracking the investigation
  */
-export async function registerK8sOpsWithNeurolink(neurolink: NeuroLinkInstance): Promise<void> {
-  // Convert our tools to MCPServerInfo format expected by Neurolink
-  const serverInfo: MCPServerInfo = {
-    id: "k8s-ops",
-    name: k8sOpsServer.title,
-    description: k8sOpsServer.description,
-    transport: "stdio",
-    status: "connected",
-    tools: k8sOpsServer.tools.map((tool) => ({
-      name: tool.id,
-      description: tool.description,
-      inputSchema: tool.inputSchema as Record<string, unknown>,
-      execute: async (params: unknown) => {
-        const result = await k8sOpsServer.executeTool(
-          tool.id,
-          params as Record<string, unknown>,
-          { k8sMode: "kubeconfig" }
-        );
-        return result;
-      },
-    })),
-    metadata: {
-      category: k8sOpsServer.category,
-      version: k8sOpsServer.version,
-      provider: "k8s-ops-agent",
-    },
+export async function registerK8sOpsWithNeurolink(
+  neurolink: NeuroLinkInstance,
+  investigationContext: any  // Will be InvestigationContext from investigation module
+): Promise<void> {
+  // Use the investigation context's snapshot store directly
+  // No complex session management, just simple in-memory context
+  const sharedContext = {
+    k8sMode: "kubeconfig" as const,
+    investigationContext,  // Pass the whole context
   };
 
-  await neurolink.addInMemoryMCPServer("k8s-ops", serverInfo);
-  console.log("✅ K8s Ops Server registered with Neurolink");
+  // Convert K8s tools to the format expected by registerTools()
+  const toolsArray = k8sOpsServer.tools.map((tool) => ({
+    name: `k8s-ops_${tool.id}`,
+    tool: {
+      description: tool.description,
+      inputSchema: tool.inputSchema as Record<string, unknown>,
+      execute: async (params: unknown, context?: unknown) => {
+        // Add breadcrumb for this tool execution
+        sharedContext.investigationContext.addBreadcrumb(`Executing ${tool.id}`);
+
+        // Build tool context with investigation data
+        const toolContext = {
+          k8sMode: sharedContext.k8sMode,
+          snapshotStore: sharedContext.investigationContext.snapshotStore,
+          investigation: {
+            goal: sharedContext.investigationContext.goal,
+            snapshotStore: sharedContext.investigationContext.snapshotStore,
+            findings: sharedContext.investigationContext.findings,
+            breadcrumbs: sharedContext.investigationContext.breadcrumbs,
+            addFinding: sharedContext.investigationContext.addFinding.bind(sharedContext.investigationContext),
+            addBreadcrumb: sharedContext.investigationContext.addBreadcrumb.bind(sharedContext.investigationContext),
+          }
+        };
+
+        // Call the tool's execute function
+        const result = await tool.execute(
+          params as Record<string, unknown>,
+          toolContext
+        );
+
+        // Auto-accumulate findings from different tool result formats
+        if (result && typeof result === 'object' && 'success' in result && result.success) {
+          const resultData = (result as any).data;
+
+          // Direct findings array
+          if (resultData?.findings && Array.isArray(resultData.findings)) {
+            resultData.findings.forEach((finding: any) => {
+              sharedContext.investigationContext.addFinding(finding);
+            });
+          }
+
+          // Cost optimization recommendations → findings
+          if (resultData?.recommendations && Array.isArray(resultData.recommendations)) {
+            resultData.recommendations.forEach((rec: any) => {
+              sharedContext.investigationContext.addFinding({
+                title: `Cost: ${rec.type}`,
+                description: rec.description,
+                severity: rec.severity === 'high' ? 'high' : rec.severity === 'medium' ? 'medium' : 'low',
+                category: 'cost-optimization',
+                suggestedAction: rec.suggestedAction,
+                evidence: {
+                  targetRef: rec.targetRef,
+                  potentialSavings: rec.potentialSavings,
+                },
+              });
+            });
+          }
+
+          // Zombie workloads → findings
+          if (resultData?.zombies && Array.isArray(resultData.zombies)) {
+            resultData.zombies.forEach((zombie: any) => {
+              sharedContext.investigationContext.addFinding({
+                title: `Zombie: ${zombie.kind} ${zombie.name}`,
+                description: zombie.reason,
+                severity: zombie.severity === 'high' ? 'high' : zombie.severity === 'medium' ? 'medium' : 'low',
+                category: 'zombie-workload',
+                suggestedAction: zombie.suggestedAction,
+                evidence: {
+                  kind: zombie.kind,
+                  name: zombie.name,
+                  namespace: zombie.namespace,
+                  lastActivityTime: zombie.lastActivityTime,
+                  details: zombie.details,
+                },
+              });
+            });
+          }
+
+          // Istio traffic issues → findings
+          if (resultData?.issues && Array.isArray(resultData.issues)) {
+            resultData.issues.forEach((issue: any) => {
+              sharedContext.investigationContext.addFinding({
+                title: `Istio: ${issue.type}`,
+                description: issue.description,
+                severity: issue.severity === 'high' ? 'high' : issue.severity === 'medium' ? 'medium' : 'low',
+                category: 'istio-traffic',
+                suggestedAction: issue.suggestedFix,
+                evidence: {
+                  type: issue.type,
+                  relatedResources: issue.relatedResources,
+                },
+              });
+            });
+          }
+        }
+
+        // Return result data directly (Neurolink expects unwrapped data)
+        if (result && typeof result === 'object' && 'success' in result && result.success) {
+          return (result as any).data || result;
+        }
+
+        // If execution failed, throw an error
+        if (result && typeof result === 'object' && 'success' in result && !result.success) {
+          throw new Error((result as any).error?.message || 'Tool execution failed');
+        }
+
+        // Return the result directly
+        return result;
+      },
+    }
+  }));
+
+  // Register tools with Neurolink
+  neurolink.registerTools(toolsArray as any);
+  console.log("✅ K8s Ops Server registered with Neurolink (using InvestigationContext)");
 }
 
 /**

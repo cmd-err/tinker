@@ -14,6 +14,40 @@ export interface ToolExecutionContext {
   timeout?: number;
   /** Optional logger function */
   logger?: (message: string) => void;
+
+  // Session Management (Phase 1)
+  /** Session ID for tracking investigation continuity */
+  sessionId?: string;
+  /** User identifier */
+  userId?: string;
+  /** Session manager instance for recursive investigations */
+  sessionManager?: any; // Will be typed as SessionManager when imported
+
+  /** Shared snapshot store to avoid passing large data between tool calls */
+  snapshotStore?: Map<string, ClusterSnapshot>;
+
+  // Investigation Context (simplified in-memory context)
+  investigation?: {
+    /** Investigation goal/question */
+    goal: string;
+    /** Snapshot store for sharing cluster state between tools */
+    snapshotStore: Map<string, any>;
+    /** Accumulated findings */
+    findings: Array<{
+      title: string;
+      description: string;
+      severity: "critical" | "high" | "medium" | "low" | "info";
+      category: string;
+      suggestedAction?: string;
+      evidence?: Record<string, unknown>;
+    }>;
+    /** Investigation breadcrumbs (trail of steps taken) */
+    breadcrumbs: string[];
+    /** Method to add a finding */
+    addFinding?: (finding: any) => void;
+    /** Method to add a breadcrumb */
+    addBreadcrumb?: (step: string | { action: string; result?: string; timestamp?: Date }) => void;
+  };
 }
 
 /**

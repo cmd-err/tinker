@@ -8,6 +8,7 @@ import { getClusterSnapshotTool } from "./tools/getClusterSnapshot.js";
 import { analyzeCostOptimizationTool } from "./tools/analyzeCostOptimization.js";
 import { detectZombieWorkloadsTool } from "./tools/detectZombieWorkloads.js";
 import { analyzeIstioTrafficTool } from "./tools/analyzeIstioTraffic.js";
+import { investigateDeeperTool } from "./tools/investigateDeeper.js";
 
 /**
  * Configuration for creating a K8s Ops Server
@@ -65,6 +66,7 @@ export function createK8sOpsServer(config?: K8sOpsServerConfig): K8sOpsServer {
     analyzeCostOptimizationTool,
     detectZombieWorkloadsTool,
     analyzeIstioTrafficTool,
+    investigateDeeperTool,
   ];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

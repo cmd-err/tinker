@@ -87,3 +87,10 @@ export {
   type AgentEventType,
   type AgentEventHandler,
 } from "./agent/index.js";
+
+// Export Investigation (in-memory context)
+export {
+  InvestigationContext,
+  type Finding,
+  type InvestigationSummary,
+} from "./investigation/index.js";

@@ -456,6 +456,15 @@ async function executeGetClusterSnapshot(
       }
     }
 
+    // Limit namespaces to prevent overwhelming the LLM
+    const MAX_NAMESPACES = 10;
+    if (targetNamespaces.length > MAX_NAMESPACES) {
+      warnings.push(
+        `Limiting to first ${MAX_NAMESPACES} namespaces (found ${targetNamespaces.length}). Use 'namespaces' parameter to specify which ones to fetch.`
+      );
+      targetNamespaces = targetNamespaces.slice(0, MAX_NAMESPACES);
+    }
+
     // Fetch namespace summaries
     const namespaces: NamespaceSummary[] = [];
     const workloads: WorkloadInfo[] = [];
@@ -518,7 +527,7 @@ async function executeGetClusterSnapshot(
       });
     }
 
-    // Fetch Istio resources if requested
+    // Fetch Istio resources if requested (limit to prevent overwhelming LLM)
     let istio: ClusterSnapshot["istio"] = undefined;
 
     if (input.includeIstio) {
@@ -528,35 +537,56 @@ async function executeGetClusterSnapshot(
       const destinationRules: DestinationRuleInfo[] = [];
       const gateways: GatewayInfo[] = [];
 
+      const MAX_ISTIO_RESOURCES = 20;
+
       try {
         const vsRaw = await listVirtualServices(clients.customObjectsApi);
-        virtualServices.push(
-          ...vsRaw.map((vs: unknown) =>
+        const vsList = vsRaw
+          .map((vs: unknown) =>
             parseVirtualServiceInfo(vs as Parameters<typeof parseVirtualServiceInfo>[0])
           )
-        );
+          .slice(0, MAX_ISTIO_RESOURCES);
+        virtualServices.push(...vsList);
+        
+        if (vsRaw.length > MAX_ISTIO_RESOURCES) {
+          warnings.push(
+            `Limited VirtualServices to ${MAX_ISTIO_RESOURCES} (found ${vsRaw.length})`
+          );
+        }
       } catch (error) {
         warnings.push(`Failed to fetch VirtualServices: ${String(error)}`);
       }
 
       try {
         const drRaw = await listDestinationRules(clients.customObjectsApi);
-        destinationRules.push(
-          ...drRaw.map((dr: unknown) =>
+        const drList = drRaw
+          .map((dr: unknown) =>
             parseDestinationRuleInfo(dr as Parameters<typeof parseDestinationRuleInfo>[0])
           )
-        );
+          .slice(0, MAX_ISTIO_RESOURCES);
+        destinationRules.push(...drList);
+        
+        if (drRaw.length > MAX_ISTIO_RESOURCES) {
+          warnings.push(
+            `Limited DestinationRules to ${MAX_ISTIO_RESOURCES} (found ${drRaw.length})`
+          );
+        }
       } catch (error) {
         warnings.push(`Failed to fetch DestinationRules: ${String(error)}`);
       }
 
       try {
         const gwRaw = await listGateways(clients.customObjectsApi);
-        gateways.push(
-          ...gwRaw.map((gw: unknown) =>
+        const gwList = gwRaw
+          .map((gw: unknown) =>
             parseGatewayInfo(gw as Parameters<typeof parseGatewayInfo>[0])
           )
-        );
+          .slice(0, MAX_ISTIO_RESOURCES);
+        gateways.push(...gwList);
+        
+        if (gwRaw.length > MAX_ISTIO_RESOURCES) {
+          warnings.push(`Limited Gateways to ${MAX_ISTIO_RESOURCES} (found ${gwRaw.length})`);
+        }
       } catch (error) {
         warnings.push(`Failed to fetch Gateways: ${String(error)}`);
       }
@@ -574,9 +604,38 @@ async function executeGetClusterSnapshot(
       istio,
     };
 
+    // Generate unique snapshot ID
+    const snapshotId = `snap-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+    // Store snapshot in context for later retrieval by analysis tools
+    if (!context.snapshotStore) {
+      context.snapshotStore = new Map<string, ClusterSnapshot>();
+    }
+    context.snapshotStore.set(snapshotId, snapshot);
+
+    // Return only snapshot ID and summary (not full snapshot to avoid LLM context truncation)
     return {
       success: true,
-      data: snapshot,
+      data: {
+        snapshotId,
+        summary: {
+          timestamp: snapshot.timestamp,
+          counts: {
+            nodes: nodes.length,
+            namespaces: namespaces.length,
+            workloads: workloads.length,
+            pods: pods.length,
+            hpas: hpas.length,
+            istio: istio
+              ? {
+                  virtualServices: istio.virtualServices.length,
+                  destinationRules: istio.destinationRules.length,
+                  gateways: istio.gateways.length,
+                }
+              : undefined,
+          },
+        },
+      } as any,
       metadata: {
         executionTimeMs: Date.now() - startTime,
         warnings: warnings.length > 0 ? warnings : undefined,

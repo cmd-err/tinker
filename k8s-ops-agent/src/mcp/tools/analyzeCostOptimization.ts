@@ -18,45 +18,54 @@ import {
 } from "../../types.js";
 
 // Input schema for the tool
-export const AnalyzeCostOptimizationInputSchema = z.object({
-  snapshot: z
-    .custom<ClusterSnapshot>()
-    .describe("The cluster snapshot to analyze"),
-  thresholds: z
-    .object({
-      nodeUtilizationLow: z
-        .number()
-        .min(0)
-        .max(1)
-        .default(0.3)
-        .describe("Node utilization below this is considered underutilized"),
-      workloadOverprovisionRatio: z
-        .number()
-        .min(1)
-        .default(2)
-        .describe("Request/usage ratio above this is considered overprovisioned"),
-      idlePodThresholdHours: z
-        .number()
-        .min(0)
-        .default(24)
-        .describe("Pods with no activity for this many hours are flagged"),
-    })
-    .default({})
-    .describe("Thresholds for cost analysis"),
-  pricingConfig: z
-    .object({
-      cpuCoreHourCost: z
-        .number()
-        .default(0.05)
-        .describe("Cost per CPU core-hour in USD"),
-      memoryGiBHourCost: z
-        .number()
-        .default(0.01)
-        .describe("Cost per GiB-hour in USD"),
-    })
-    .optional()
-    .describe("Optional pricing configuration for cost estimates"),
-});
+export const AnalyzeCostOptimizationInputSchema = z
+  .object({
+    snapshotId: z
+      .string()
+      .optional()
+      .describe("ID of a previously fetched cluster snapshot (from get-cluster-snapshot)"),
+    snapshot: z
+      .custom<ClusterSnapshot>()
+      .optional()
+      .describe("The cluster snapshot to analyze (alternative to snapshotId)"),
+    thresholds: z
+      .object({
+        nodeUtilizationLow: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.3)
+          .describe("Node utilization below this is considered underutilized"),
+        workloadOverprovisionRatio: z
+          .number()
+          .min(1)
+          .default(2)
+          .describe("Request/usage ratio above this is considered overprovisioned"),
+        idlePodThresholdHours: z
+          .number()
+          .min(0)
+          .default(24)
+          .describe("Pods with no activity for this many hours are flagged"),
+      })
+      .default({})
+      .describe("Thresholds for cost analysis"),
+    pricingConfig: z
+      .object({
+        cpuCoreHourCost: z
+          .number()
+          .default(0.05)
+          .describe("Cost per CPU core-hour in USD"),
+        memoryGiBHourCost: z
+          .number()
+          .default(0.01)
+          .describe("Cost per GiB-hour in USD"),
+      })
+      .optional()
+      .describe("Optional pricing configuration for cost estimates"),
+  })
+  .refine((data) => data.snapshotId || data.snapshot, {
+    message: "Must provide either snapshotId or snapshot",
+  });
 
 export type AnalyzeCostOptimizationInput = z.infer<typeof AnalyzeCostOptimizationInputSchema>;
 
@@ -337,12 +346,45 @@ function analyzeIdleNamespaces(
  */
 async function executeAnalyzeCostOptimization(
   input: AnalyzeCostOptimizationInput,
-  _context: ToolExecutionContext
+  context: ToolExecutionContext
 ): Promise<ToolResult<CostAnalysisResult>> {
   const startTime = Date.now();
 
   try {
-    const { snapshot, thresholds, pricingConfig } = input;
+    // Resolve snapshot from either snapshotId or direct snapshot parameter
+    let snapshot: ClusterSnapshot;
+
+    if (input.snapshotId) {
+      const storedSnapshot = context.snapshotStore?.get(input.snapshotId);
+      if (!storedSnapshot) {
+        return {
+          success: false,
+          error: {
+            code: "SNAPSHOT_NOT_FOUND",
+            message: `Snapshot with ID ${input.snapshotId} not found. Please call get-cluster-snapshot first.`,
+          },
+          metadata: {
+            executionTimeMs: Date.now() - startTime,
+          },
+        };
+      }
+      snapshot = storedSnapshot;
+    } else if (input.snapshot) {
+      snapshot = input.snapshot;
+    } else {
+      return {
+        success: false,
+        error: {
+          code: "MISSING_SNAPSHOT",
+          message: "Must provide either snapshotId or snapshot",
+        },
+        metadata: {
+          executionTimeMs: Date.now() - startTime,
+        },
+      };
+    }
+
+    const { thresholds, pricingConfig } = input;
     const recommendations: CostRecommendation[] = [];
 
     // Analyze node utilization

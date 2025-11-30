@@ -17,6 +17,14 @@
     "./agent": {
       "types": "./dist/agent/index.d.ts",
       "import": "./dist/agent/index.js"
+    },
+    "./session": {
+      "types": "./dist/session/index.d.ts",
+      "import": "./dist/session/index.js"
+    },
+    "./investigation": {
+      "types": "./dist/investigation/index.d.ts",
+      "import": "./dist/investigation/index.js"
     }
   },
   "scripts": {

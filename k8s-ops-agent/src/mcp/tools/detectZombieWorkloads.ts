@@ -21,31 +21,40 @@ import {
 } from "../../types.js";
 
 // Input schema for the tool
-export const DetectZombieWorkloadsInputSchema = z.object({
-  snapshot: z
-    .custom<ClusterSnapshot>()
-    .describe("The cluster snapshot to analyze"),
-  thresholds: z
-    .object({
-      idleDaysThreshold: z
-        .number()
-        .min(0)
-        .default(7)
-        .describe("Days without activity to consider a workload zombie"),
-      crashLoopRestartThreshold: z
-        .number()
-        .min(1)
-        .default(5)
-        .describe("Number of restarts to consider a pod in crash loop"),
-      stuckPodHours: z
-        .number()
-        .min(0)
-        .default(24)
-        .describe("Hours in pending/unknown state to consider stuck"),
-    })
-    .default({})
-    .describe("Thresholds for zombie detection"),
-});
+export const DetectZombieWorkloadsInputSchema = z
+  .object({
+    snapshotId: z
+      .string()
+      .optional()
+      .describe("ID of a previously fetched cluster snapshot (from get-cluster-snapshot)"),
+    snapshot: z
+      .custom<ClusterSnapshot>()
+      .optional()
+      .describe("The cluster snapshot to analyze (alternative to snapshotId)"),
+    thresholds: z
+      .object({
+        idleDaysThreshold: z
+          .number()
+          .min(0)
+          .default(7)
+          .describe("Days without activity to consider a workload zombie"),
+        crashLoopRestartThreshold: z
+          .number()
+          .min(1)
+          .default(5)
+          .describe("Number of restarts to consider a pod in crash loop"),
+        stuckPodHours: z
+          .number()
+          .min(0)
+          .default(24)
+          .describe("Hours in pending/unknown state to consider stuck"),
+      })
+      .default({})
+      .describe("Thresholds for zombie detection"),
+  })
+  .refine((data) => data.snapshotId || data.snapshot, {
+    message: "Must provide either snapshotId or snapshot",
+  });
 
 export type DetectZombieWorkloadsInput = z.infer<typeof DetectZombieWorkloadsInputSchema>;
 
@@ -452,12 +461,45 @@ function detectZombieWorkloads(
  */
 async function executeDetectZombieWorkloads(
   input: DetectZombieWorkloadsInput,
-  _context: ToolExecutionContext
+  context: ToolExecutionContext
 ): Promise<ToolResult<ZombieDetectionResult>> {
   const startTime = Date.now();
 
   try {
-    const { snapshot, thresholds } = input;
+    // Resolve snapshot from either snapshotId or direct snapshot parameter
+    let snapshot: ClusterSnapshot;
+
+    if (input.snapshotId) {
+      const storedSnapshot = context.snapshotStore?.get(input.snapshotId);
+      if (!storedSnapshot) {
+        return {
+          success: false,
+          error: {
+            code: "SNAPSHOT_NOT_FOUND",
+            message: `Snapshot with ID ${input.snapshotId} not found. Please call get-cluster-snapshot first.`,
+          },
+          metadata: {
+            executionTimeMs: Date.now() - startTime,
+          },
+        };
+      }
+      snapshot = storedSnapshot;
+    } else if (input.snapshot) {
+      snapshot = input.snapshot;
+    } else {
+      return {
+        success: false,
+        error: {
+          code: "MISSING_SNAPSHOT",
+          message: "Must provide either snapshotId or snapshot",
+        },
+        metadata: {
+          executionTimeMs: Date.now() - startTime,
+        },
+      };
+    }
+
+    const { thresholds } = input;
     const resolvedThresholds = {
       idleDaysThreshold: thresholds?.idleDaysThreshold ?? 7,
       crashLoopRestartThreshold: thresholds?.crashLoopRestartThreshold ?? 5,

@@ -81,37 +81,51 @@ export function getNeuroLinkServerConfig(): NeurolinkMCPServerConfig {
 
 /**
  * Neurolink interface - defines expected Neurolink SDK methods
- * This is a placeholder until the actual SDK is available
+ * Updated to match actual NeuroLink SDK from forked-neuro
  */
 export interface Neurolink {
   addInMemoryMCPServer: (
     serverId: string,
     config: NeurolinkMCPServerConfig
   ) => Promise<void>;
+  registerTools: (tools: Array<{ name: string; tool: any }>) => void;
 }
 
 /**
  * Register the K8s Ops Server with Neurolink
  *
- * Note: This requires the Neurolink SDK to be installed.
- * Currently a stub implementation that logs the configuration.
+ * Uses registerTools() method to match lighthouse pattern - this registers
+ * tools as "custom" category which makes them available to providers.
  */
 export async function registerWithNeurolink(
   neurolink: Neurolink
 ): Promise<void> {
-  const config = getNeuroLinkServerConfig();
+  const server = k8sOpsServer;
 
-  // When Neurolink SDK is available:
-  // await neurolink.addInMemoryMCPServer("k8s-ops", config);
+  // Convert K8s tools to the format expected by registerTools()
+  // This matches how lighthouse registers MCP tools (sessionInstanceManager.ts:1886)
+  const toolsArray = server.tools.map((tool) => ({
+    name: `k8s-ops_${tool.id}`,  // Prefix with server ID like lighthouse does
+    tool: {
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+      execute: async (params: unknown) => {
+        // Call the tool's execute function with empty context
+        // The context will be set via setToolContext() if needed
+        return await tool.execute(params, {} as any);
+      }
+    }
+  }));
 
-  // For now, just verify the neurolink object exists
-  if (neurolink && typeof neurolink.addInMemoryMCPServer === "function") {
-    await neurolink.addInMemoryMCPServer("k8s-ops", config);
-    console.log("K8s Ops Server registered with Neurolink");
+  // Use registerTools() instead of addInMemoryMCPServer()
+  // This registers tools as "custom" category, making them available to getCustomTools()
+  if (neurolink && typeof neurolink.registerTools === "function") {
+    neurolink.registerTools(toolsArray as any);
+    console.log("✅ K8s Ops Server registered with Neurolink");
   } else {
     console.log(
-      "Neurolink SDK not fully available. Server config prepared:",
-      JSON.stringify(config, null, 2)
+      "⚠️  Neurolink SDK not fully available. Tools prepared:",
+      toolsArray.map(t => t.name)
     );
   }
 }

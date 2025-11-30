@@ -22,24 +22,33 @@ import {
 } from "../../types.js";
 
 // Input schema for the tool
-export const AnalyzeIstioTrafficInputSchema = z.object({
-  snapshot: z
-    .custom<ClusterSnapshot>()
-    .describe("The cluster snapshot to analyze (must include Istio resources)"),
-  options: z
-    .object({
-      includeTopology: z
-        .boolean()
-        .default(true)
-        .describe("Whether to generate a traffic topology graph"),
-      checkMTLS: z
-        .boolean()
-        .default(true)
-        .describe("Whether to check for mTLS consistency"),
-    })
-    .default({})
-    .describe("Analysis options"),
-});
+export const AnalyzeIstioTrafficInputSchema = z
+  .object({
+    snapshotId: z
+      .string()
+      .optional()
+      .describe("ID of a previously fetched cluster snapshot (from get-cluster-snapshot)"),
+    snapshot: z
+      .custom<ClusterSnapshot>()
+      .optional()
+      .describe("The cluster snapshot to analyze (must include Istio resources, alternative to snapshotId)"),
+    options: z
+      .object({
+        includeTopology: z
+          .boolean()
+          .default(true)
+          .describe("Whether to generate a traffic topology graph"),
+        checkMTLS: z
+          .boolean()
+          .default(true)
+          .describe("Whether to check for mTLS consistency"),
+      })
+      .default({})
+      .describe("Analysis options"),
+  })
+  .refine((data) => data.snapshotId || data.snapshot, {
+    message: "Must provide either snapshotId or snapshot",
+  });
 
 export type AnalyzeIstioTrafficInput = z.infer<typeof AnalyzeIstioTrafficInputSchema>;
 
@@ -569,12 +578,45 @@ function buildTopology(
  */
 async function executeAnalyzeIstioTraffic(
   input: AnalyzeIstioTrafficInput,
-  _context: ToolExecutionContext
+  context: ToolExecutionContext
 ): Promise<ToolResult<IstioTrafficAnalysisResult>> {
   const startTime = Date.now();
 
   try {
-    const { snapshot, options } = input;
+    // Resolve snapshot from either snapshotId or direct snapshot parameter
+    let snapshot: ClusterSnapshot;
+
+    if (input.snapshotId) {
+      const storedSnapshot = context.snapshotStore?.get(input.snapshotId);
+      if (!storedSnapshot) {
+        return {
+          success: false,
+          error: {
+            code: "SNAPSHOT_NOT_FOUND",
+            message: `Snapshot with ID ${input.snapshotId} not found. Please call get-cluster-snapshot first.`,
+          },
+          metadata: {
+            executionTimeMs: Date.now() - startTime,
+          },
+        };
+      }
+      snapshot = storedSnapshot;
+    } else if (input.snapshot) {
+      snapshot = input.snapshot;
+    } else {
+      return {
+        success: false,
+        error: {
+          code: "MISSING_SNAPSHOT",
+          message: "Must provide either snapshotId or snapshot",
+        },
+        metadata: {
+          executionTimeMs: Date.now() - startTime,
+        },
+      };
+    }
+
+    const { options } = input;
     const issues: IstioTopologyIssue[] = [];
 
     // Check if Istio data is available

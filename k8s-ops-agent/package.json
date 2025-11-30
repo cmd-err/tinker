@@ -1,0 +1,68 @@
+{
+  "name": "@cmd-err/k8s-ops-agent",
+  "version": "0.1.0",
+  "description": "Kubernetes Cost & Traffic Ops Agent integrated with Neurolink via MCP",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    },
+    "./agent": {
+      "types": "./dist/agent/index.d.ts",
+      "import": "./dist/agent/index.js"
+    },
+    "./session": {
+      "types": "./dist/session/index.d.ts",
+      "import": "./dist/session/index.js"
+    },
+    "./investigation": {
+      "types": "./dist/investigation/index.d.ts",
+      "import": "./dist/investigation/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -w -p tsconfig.json",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" || exit 0",
+    "test": "echo \"No tests yet\" && exit 0",
+    "dev:snapshot": "node dist/dev/runClusterSnapshot.js",
+    "dev:agent": "node dist/dev/runAgent.js",
+    "dev:agent:health": "node dist/dev/runAgent.js cluster-health-check",
+    "dev:agent:cost": "node dist/dev/runAgent.js cost-optimization",
+    "dev:agent:zombies": "node dist/dev/runAgent.js zombie-detection",
+    "dev:agent:istio": "node dist/dev/runAgent.js istio-analysis",
+    "dev:agent:full": "node dist/dev/runAgent.js full-cluster-report",
+    "dev:neurolink": "node dist/dev/runNeurolinkAgent.js",
+    "start": "node dist/server.js",
+    "start:dev": "K8S_MODE=kubeconfig node dist/server.js",
+    "start:mcp": "node dist/mcpServer.js"
+  },
+  "keywords": [
+    "kubernetes",
+    "cost-optimization",
+    "istio",
+    "mcp",
+    "agent",
+    "neurolink"
+  ],
+  "author": "cmd-err",
+  "license": "MIT",
+  "dependencies": {
+    "@juspay/neurolink": "^8.2.0",
+    "@kubernetes/client-node": "^1.4.0",
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.1",
+    "eslint": "^9.0.0",
+    "typescript": "^5.6.0"
+  }
+}
